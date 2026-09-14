@@ -1,0 +1,4 @@
+# コピーして .dev.vars にし，値を入れる（.dev.vars は git に入れない）
+SLACK_CLIENT_ID=""
+SLACK_CLIENT_SECRET=""
+SLACK_SIGNING_SECRET=""
