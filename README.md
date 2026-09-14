@@ -65,16 +65,19 @@ Workers AI はローカル実行でも Cloudflare 側で推論するので，ロ
 ## テスト 2：Slack につなぐ
 
 ### Slack アプリを作る
-1. https://api.slack.com/apps → **Create New App** → **From scratch**
-2. **OAuth & Permissions** → Bot Token Scopes に `chat:write` `chat:write.public` `channels:history` `app_mentions:read` `im:write` `im:history`
-3. **Basic Information** → App Credentials の **Client ID / Client Secret / Signing Secret** を控える
-4. **App Home** → Show Tabs → **Messages Tab** を ON，「Allow users to send Slash commands and messages from the messages tab」に✓（DM を受けるため）
+1. https://api.slack.com/apps → **Create New App** → **Brank app**（名前と，入れるワークスペースを選ぶ）
+2. **OAuth & Permissions** → Scopes → **Bot Token Scopes** に次を追加
+   `chat:write` `channels:history` `app_mentions:read` `im:write` `im:history`
+3. 同じページ上部の **Install to Workspace** → **Allow**．出てきた **Bot User OAuth Token**（`xoxb-` で始まる）を控える
+4. **Basic Information** → App Credentials → **Signing Secret** を控える
+5. **App Home** → Show Tabs → **Messages Tab** を ON，「Allow users to send Slash commands and messages from the messages tab」に✓（DM を受けるため）
 
 ### 秘密を置く
 ```bash
 cp .dev.vars.example .dev.vars
 ```
-`.dev.vars` に 3 つの値を書く．
+`.dev.vars` に `SLACK_SIGNING_SECRET` と `SLACK_BOT_TOKEN` を書く．`SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` は空のままでよい．
+`npm run dev` を動かしたまま編集した場合は，念のため一度止めて再起動する．
 
 ### ローカルを外から見えるようにする
 ```bash
@@ -88,33 +91,53 @@ npx cloudflared tunnel --url http://localhost:8787
 
 ### Slack にイベントの届け先を教える
 1. Slack アプリ設定 → **Event Subscriptions** → Enable Events を ON
-2. Request URL に `https://xxxx.trycloudflare.com/slack` → **Verified** と出れば OK
-3. Subscribe to bot events に `app_mention` と `message.im` → Save
-4. ブラウザで `https://xxxx.trycloudflare.com/install` を開き，ワークスペースに **Allow** →「Successfully registered!」
+2. Request URL に `https://xxxx.trycloudflare.com/slack`（**末尾の `/slack` を忘れない**．忘れても救済で動くが付けるのが正）→ **Verified** と出れば OK．URL 欄が無く「Socket Mode is enabled」と出ていたら，先に Settings → Socket Mode を OFF にする
+3. Subscribe to bot events に `app_mention` と `message.im` を追加 → **Save Changes**（保存しないとイベントは来ない）
+4. スコープやイベントを変えたあとに黄色い「reinstall」のバナーが出たら，指示どおり再インストールする
 
 ### 話しかける
-- アプリに DM：「来週の金曜は何日？」
-- チャンネルで `@アプリ名 9月30日まであと何日？` → スレッドに返る
+- Slack 左の Apps からアプリを開いて DM：「来週の金曜は何日？」
+- チャンネルにアプリを招待（`/invite @アプリ名`）してから `@アプリ名 9月30日まであと何日？` → スレッドに返る
 
 答えの下に「🔧 手順」が付きます．消すときは `wrangler.jsonc` の `SHOW_STEPS` を `"false"`．
 
 トンネルの URL は起動ごとに変わるので，`cloudflared` を再起動したら Request URL も直す．
 
+### （任意）OAuth の `/install` で入れる方式
+公式例どおりの OAuth 方式も残してあります．複数ワークスペースに配るときに使います．
+`.dev.vars` に `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` を書き，Slack アプリ設定の **OAuth & Permissions → Redirect URLs** に `https://xxxx.trycloudflare.com/accept` を登録して Save，ブラウザで `https://xxxx.trycloudflare.com/install` → **Allow** →「Successfully registered!」．
+トンネル URL が変わるたびに Redirect URL も直す必要があるので，学習中は Bot User OAuth Token 方式を勧めます．
+
 ## テスト 3：本番に置く
 
 ```bash
-npx wrangler secret put SLACK_CLIENT_ID
-npx wrangler secret put SLACK_CLIENT_SECRET
 npx wrangler secret put SLACK_SIGNING_SECRET
+npx wrangler secret put SLACK_BOT_TOKEN
 npm run deploy
 ```
-出てきた `https://slack-agent-base.<自分のサブドメイン>.workers.dev` で，Request URL を `.../slack` に直し，`.../install` をもう一度開く．
+（OAuth 方式を使うときは `SLACK_CLIENT_ID` と `SLACK_CLIENT_SECRET` も `secret put` する）
+出てきた `https://slack-agent-base.<自分のサブドメイン>.workers.dev` で，Event Subscriptions の Request URL を `.../slack` に直す．
 公開後は `/ask` を閉じたければ `ASK_ENABLED` を `"false"` にして再デプロイ．
+
+## トレースを見る（エージェントが何をしたか）
+
+`wrangler.jsonc` でトレースを有効にしてあり，モデル呼び出しは Agents SDK の計測ラッパー（`wrapAISDK`）で包んでいます．
+デプロイ後に 1 度話しかけてから，Cloudflare ダッシュボードの **Agents** タブ（ https://dash.cloudflare.com/?to=/:account/agents ）を開くと，
+
+- エージェントごとの セッション数・ターン数・トークン使用量
+- **Session replay**：会話の再生（メッセージ・道具の呼び出し・結果）
+- **Trace**：1 ターンの中で「モデル呼び出し → 道具 → モデル呼び出し」がいつ・何 ms かかったかの滝図
+
+が見られます．`invoke_agent`（1 ターン）の下に `chat`（モデル）と `execute_tool`（道具）が並ぶ構造です．
+本文まで記録する設定（`storeMessages` / `storeTools`）は `src/brain.ts` にあります．個人情報を扱う運用では false にします．
+料金：Free プランは 1 日 20 万イベント・3 日保持（1 スパン＝1 イベント）．2026-10-01 まではトレースは無料．
 
 ## つまずいたとき
 
+- **Verified なのにイベントが 1 件も届かない**：Settings → **Socket Mode** が ON になっていないか見る．ON だと Slack は Request URL に送らない（OFF にしてから Request URL を入れ直す）
+
 - **Verified にならない**：`.dev.vars` の Signing Secret が違う／`npm run dev` が落ちている／URL の末尾が `/slack` でない
-- **返事が来ない**：`npm run dev` のターミナルにエラーが出ていないか見る．`/ask` で頭だけ試して切り分ける
+- **返事が来ない**：まず `npm run dev` のターミナルに `POST .../slack` が出ているか見る．出ていなければ Slack 側（イベント購読の保存・Messages Tab・URL の末尾 `/slack`）．出ているのに返らなければ `.dev.vars` の `SLACK_BOT_TOKEN` と，ターミナルの `Slack API HTTP` エラー．`/ask` で頭だけ試して切り分ける
 - **返事が 2 回来る**：Slack の再送．`src/slack.ts` が再送ヘッダを無視するので通常は起きない．起きたらモデルの応答が極端に遅い
 - **Durable Object のデプロイに失敗**：`migrations` が `new_sqlite_classes` になっているか（Free プランは SQLite 必須）
 - **モデルを変えたい**：`wrangler.jsonc` の `MODEL`．無料枠で関数呼び出しできる候補は `@cf/qwen/qwen3-30b-a3b-fp8`（既定）`@cf/zai-org/glm-4.7-flash` `@cf/openai/gpt-oss-20b`．

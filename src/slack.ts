@@ -2,9 +2,10 @@
 // 出典: cloudflare/awesome-agents  agents/slack/src/slack.ts  (commit 6996329)
 //   https://github.com/cloudflare/awesome-agents/blob/69963298b359ddd66331e8b3b378bb9ae666629f/agents/slack/src/slack.ts
 // 公式チュートリアル https://developers.cloudflare.com/agents/examples/slack-agent/ の手順に従い複製．
-// 変更点（2 箇所．どちらも Slack の再送による二重返信を防ぐため）:
-//   1. Slack の再送（X-Slack-Retry-Num ヘッダ付き）は処理せず 200 だけ返す
-//   2. エージェントへの受け渡しを ctx.waitUntil で包み，先に 200 を返してから処理を続ける
+// 変更点（3 箇所）:
+//   1. Slack の再送（X-Slack-Retry-Num ヘッダ付き）は処理せず 200 だけ返す（二重返信の防止）
+//   2. エージェントへの受け渡しを ctx.waitUntil で包み，先に 200 を返してから処理を続ける（3 秒ルール）
+//   3. トークンは OAuth で保存したものが無ければ環境変数 SLACK_BOT_TOKEN を使う（OAuth 無しで動かすため）
 // 受講者はこのファイルを編集しない．
 
 import { Agent, getAgentByName } from "agents";
@@ -62,8 +63,11 @@ type SlackMsg = {
 };
 
 export class SlackAgent extends Agent {
-  get token() {
-    return this.ctx.storage.kv.get("slack_token");
+  get token(): string | undefined {
+    // 1) OAuth（/install → /accept）で保存されたトークン
+    // 2) 無ければ環境変数 SLACK_BOT_TOKEN（Slack 設定画面の「Install to Workspace」で得る xoxb- トークン）
+    const stored = this.ctx.storage.kv.get<string>("slack_token");
+    return stored || (cfEnv as { SLACK_BOT_TOKEN?: string }).SLACK_BOT_TOKEN || undefined;
   }
 
   init(token: string) {
@@ -209,6 +213,9 @@ export class SlackAgent extends Agent {
           const ts = request.headers.get("X-Slack-Request-Timestamp");
           const sig = request.headers.get("X-Slack-Signature");
           if (!(await verify(slackSigningSecret, ts || "", raw, sig || ""))) {
+            console.error(
+              "[slack] 署名が一致しません．SLACK_SIGNING_SECRET が Slack アプリの Signing Secret と違う可能性があります"
+            );
             return new Response("bad sig", { status: 401 });
           }
 
@@ -220,8 +227,10 @@ export class SlackAgent extends Agent {
 
           // Slack's URL check when you first enable Events
           if (body.type === "url_verification") {
+            console.log("[slack] URL 検証に応答しました");
             return Response.json({ challenge: body.challenge });
           }
+          console.log("[slack] event:", body.event?.type, "channel:", body.event?.channel, "team:", body.team_id);
 
           if (!body.team_id)
             return new Response("Missing team id", { status: 400 });

@@ -22,5 +22,6 @@
     "ASK_ENABLED": "true"
   },
 
-  "observability": { "enabled": true }
+  // ログとトレース（Free: 1 日 20 万イベント・3 日保持．2026-10-01 まではトレース無料）
+  "observability": { "enabled": true, "traces": { "enabled": true } }
 }

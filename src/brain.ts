@@ -1,7 +1,14 @@
 // エージェントの「頭」．入口（Slack / テスト用 HTTP）に依存しない．
-import { generateText, stepCountIs, type ModelMessage } from "ai";
+import * as ai from "ai";
+import { stepCountIs, type ModelMessage } from "ai";
+import { wrapAISDK } from "agents/observability/ai";
 import { createWorkersAI } from "workers-ai-provider";
 import { makeTools } from "./tools";
+
+// AI SDK を Agents SDK の計測ラッパーで包む．これで Cloudflare ダッシュボードの Agents タブに
+// 「1 ターン＝invoke_agent → chat（モデル）→ execute_tool（道具）」のトレースが出る．
+// storeMessages / storeTools を true にすると，やり取りの本文と道具の引数・結果まで記録される（研修用．個人情報を扱うなら false に）
+const tracedAI = wrapAISDK(ai, { storeMessages: true, storeTools: true });
 
 // 指示書．受講者が最初に書き換える場所．
 export const INSTRUCTIONS = `あなたは Slack の中で働くアシスタントです．日本語で，簡潔に答えてください．
@@ -21,9 +28,17 @@ function looksLikeLeakedToolCall(text: string): boolean {
   return /<tool_call>|<\/tool_call>|<arg_key>|<arg_value>|<\|tool_call/.test(text);
 }
 
+export type ThinkContext = {
+  /** エージェントの個体を表す安定した ID（例: Slack のワークスペース ID） */
+  agentId: string;
+  /** 会話（スレッド）を表す ID */
+  conversationId: string;
+};
+
 export async function think(
   env: Env,
   messages: ModelMessage[],
+  ctx: ThinkContext,
   modelOverride?: string
 ): Promise<{ text: string; steps: StepTrace; retried: boolean }> {
   const workersai = createWorkersAI({ binding: env.AI });
@@ -31,12 +46,18 @@ export async function think(
   const model = workersai((modelOverride ?? env.MODEL) as Parameters<typeof workersai>[0]);
 
   const run = () =>
-    generateText({
+    tracedAI.generateText({
       model,
       system: INSTRUCTIONS,
       messages,
       tools: makeTools(env.TIMEZONE),
-      stopWhen: stepCountIs(6) // 道具を使う往復の上限
+      stopWhen: stepCountIs(6), // 道具を使う往復の上限
+      // トレースの見出し（Agents タブでの識別子）
+      runtimeContext: { agentId: ctx.agentId, conversationId: ctx.conversationId },
+      telemetry: {
+        functionId: "slack-agent-base",
+        includeRuntimeContext: { agentId: true, conversationId: true }
+      }
     });
 
   let result = await run();
