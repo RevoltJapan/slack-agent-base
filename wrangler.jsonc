@@ -4,24 +4,9 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-09-14",
   "compatibility_flags": ["nodejs_compat"],
-
-  // Workers AI（鍵不要．Free プランで 1 日 10,000 Neurons）
   "ai": { "binding": "AI" },
-
-  // エージェント本体＝Durable Object．Free プランでは SQLite バックエンド必須
-  "durable_objects": {
-    "bindings": [{ "name": "MyAgent", "class_name": "MyAgent" }]
-  },
+  "durable_objects": { "bindings": [{ "name": "MyAgent", "class_name": "MyAgent" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MyAgent"] }],
-
-  // 秘密でない設定値．秘密（Slack の各シークレット）は .dev.vars / wrangler secret に置く
-  "vars": {
-    "MODEL": "@cf/qwen/qwen3-30b-a3b-fp8",
-    "TIMEZONE": "Asia/Tokyo",
-    "SHOW_STEPS": "true",
-    "ASK_ENABLED": "true"
-  },
-
-  // ログとトレース（Free: 1 日 20 万イベント・3 日保持．2026-10-01 まではトレース無料）
+  "vars": { "MODEL": "@cf/qwen/qwen3-30b-a3b-fp8" },
   "observability": { "enabled": true, "traces": { "enabled": true } }
 }
