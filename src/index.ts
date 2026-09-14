@@ -30,6 +30,7 @@ export class MyAgent extends Agent<Env> {
       const history: ModelMessage[] = messages
         .filter((m) => m.text)
         .map((m) => ({ role: m.bot_id ? "assistant" : "user", content: m.text!.replace(/<@[A-Z0-9]+>/g, "") }));
+      if (history.length === 0) history.push({ role: "user", content: (e.text ?? "").replace(/<@[A-Z0-9]+>/g, "") });
       const text = await think(this.env, history, this.name, `${e.channel}:${thread}`);
       await this.slack("chat.postMessage", { channel: e.channel, thread_ts: thread, text });
     } finally {
@@ -37,11 +38,13 @@ export class MyAgent extends Agent<Env> {
     }
   }
 
-  private async slack<T = unknown>(method: string, body: Record<string, unknown>): Promise<T> {
+  // Slack API 呼び出し（読み取り系は JSON を受け付けないので，全てフォーム形式で送る）
+  private async slack<T = unknown>(method: string, params: Record<string, string | number>): Promise<T> {
+    const body = new URLSearchParams(Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])));
     const res = await fetch(`https://slack.com/api/${method}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${this.env.SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
-      body: JSON.stringify(body)
+      headers: { Authorization: `Bearer ${this.env.SLACK_BOT_TOKEN}` },
+      body
     });
     const data = (await res.json()) as T & { ok: boolean; error?: string };
     if (!data.ok) console.error(`[slack] ${method}: ${data.error}`);
