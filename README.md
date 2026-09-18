@@ -13,7 +13,7 @@ Slack で話しかけると答える，いちばん小さな AI エージェン�
 ## 1. 準備
 
 - Git
-- Node.js 18 以上
+- Node.js 22 以上
 - Cloudflare アカウント（無料）: https://dash.cloudflare.com/sign-up/workers-and-pages
 - 練習用の Slack ワークスペース
 
@@ -22,6 +22,12 @@ git clone https://github.com/RevoltJapan/slack-agent-base.git
 cd slack-agent-base
 npm install
 npx wrangler login
+```
+
+まだ環境が無いときは，Claude Code に次の 1 行を貼る．
+
+```
+https://raw.githubusercontent.com/RevoltJapan/slack-agent-base/main/SETUP.md を読んで，書いてある手順のとおりに私の PC の環境を整えてください．
 ```
 
 ## 2. Slack アプリを作る
