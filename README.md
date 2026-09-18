@@ -24,10 +24,13 @@ npm install
 npx wrangler login
 ```
 
-まだ環境が無いときは，Claude Code に次の 1 行を貼る．
+まだ環境が無いときは，Claude Code に次をそのまま貼る．
 
 ```
-https://raw.githubusercontent.com/RevoltJapan/slack-agent-base/main/SETUP.md を読んで，書いてある手順のとおりに私の PC の環境を整えてください．
+次の URL のファイルをダウンロードして保存し，保存したファイルを開いて全文を読んでください．
+要約や抜粋ではなく，保存したファイルの中身をそのまま読むことが必要です．
+https://raw.githubusercontent.com/RevoltJapan/slack-agent-base/main/SETUP.md
+読み終えたら，書いてあるとおりに私の PC の環境を整えてください．
 ```
 
 ## 2. Slack アプリを作る
