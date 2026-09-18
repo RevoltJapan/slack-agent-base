@@ -33,15 +33,18 @@ https://raw.githubusercontent.com/RevoltJapan/slack-agent-base/main/SETUP.md
 読み終えたら，書いてあるとおりに私の PC の環境を整えてください．
 ```
 
+Claude Code に `/deploy` と入力すると，以下の 2〜4 を順に案内してくれる．
+
 ## 2. Slack アプリを作る
 
-1. https://api.slack.com/apps → **Create New App** → **From scratch**
-2. **OAuth & Permissions** → Bot Token Scopes に `chat:write` `app_mentions:read` `im:history` `channels:history`
-3. 同じページの **Install to Workspace** → Allow → **Bot User OAuth Token**（`xoxb-…`）を控える
-4. **Basic Information** → **Signing Secret** を控える
-5. **App Home** → Show Tabs → **Messages Tab** を ON，「Allow users to send … messages from the messages tab」に✓
-6. **Agents** → ON
-7. **Settings → Socket Mode** が ON になっていたら **OFF**
+1. https://api.slack.com/apps → **Create New App** → **From an app manifest**
+2. 練習用ワークスペースを選ぶ
+3. **JSON** タブに `slack-app-manifest.json` の中身を貼る → Next → Create
+4. 左メニューの **Agents** を ON（マニフェストでは設定できない）
+5. **OAuth & Permissions** → **Install to Workspace** → Allow → **Bot User OAuth Token**（`xoxb-…`）を控える
+6. **Basic Information** → **Signing Secret** を控える
+
+スコープ・Messages Tab・Socket Mode OFF はマニフェストに入っている．
 
 ## 3. デプロイ
 
