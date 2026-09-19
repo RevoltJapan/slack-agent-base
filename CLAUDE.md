@@ -35,6 +35,10 @@ Slack で動く最小の AI エージェント．AX booster「AIエージェン�
   - 戻り値が `{ state: "authenticating", authUrl }` なら，その `authUrl` を **Slack に投稿して受講者に開いてもらう**
   - `{ state: "ready" }` なら認可済み
 - 道具の取得は `this.mcp.getAITools()`．AI SDK 形式のツール集合が返る
+- **取得した道具をそのまま全部渡してはいけない．** Notion の MCP はツールが多く，定義だけで 6 万トークンを超える．
+  `qwen3-30b-a3b-fp8` の上限は 32,768 トークンなので，`AI_APICallError: 5021 ... exceeded this model context window limit` で落ち，**Slack に何も返らなくなる**．
+  `getAITools()` は素の `Record` なので，**使うものだけキーを選んで渡す**（検索と取得の 2〜3 個で足りる）．
+  `getAITools(filter)` のフィルタはサーバー単位（`serverId` / `serverName` / `state`）で，ツール単位の絞り込みはできない
 - `think()` は今 `src/tools.ts` の `tools` だけを渡している．MCP の道具を混ぜるには **`think()` が追加のツールを受け取れるようにする**
 
 OAuth のコールバックは**配線済み**．`src/index.ts` が `/callback` で終わるパスを `routeAgentRequest` に渡している．ここは触らなくてよい．
