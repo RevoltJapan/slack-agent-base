@@ -1,4 +1,4 @@
-import { Agent, getAgentByName } from "agents";
+import { Agent, getAgentByName, routeAgentRequest } from "agents";
 import type { ModelMessage } from "ai";
 import { think } from "./brain";
 
@@ -14,7 +14,11 @@ type SlackMessage = {
 
 // エージェント本体（Durable Object．Slack のワークスペースごとに 1 体）
 export class MyAgent extends Agent<Env> {
-  async onSlackEvent(e: SlackMessage) {
+  // MCP をつなぐときの OAuth の戻り先．Slack のイベントから受け取って覚えておく
+  callbackHost = "";
+
+  async onSlackEvent(e: SlackMessage, callbackHost: string) {
+    this.callbackHost = callbackHost;
     if (e.bot_id || e.subtype) return;
     const isDM = e.type === "message" && e.channel.startsWith("D");
     if (!isDM && e.type !== "app_mention") return;
@@ -66,6 +70,11 @@ async function verify(secret: string, req: Request, raw: string) {
 // 窓口（Worker）．Slack の Events API はここに届く
 export default {
   async fetch(req, env, ctx) {
+    // MCP をつないだときの OAuth の戻り先．エージェント本体へ渡す
+    if (new URL(req.url).pathname.endsWith("/callback")) {
+      return (await routeAgentRequest(req, env)) ?? new Response("not found", { status: 404 });
+    }
+
     if (req.method !== "POST") return new Response("slack-agent-base");
     const raw = await req.text();
     if (!(await verify(env.SLACK_SIGNING_SECRET, req, raw))) return new Response("bad signature", { status: 401 });
@@ -75,7 +84,7 @@ export default {
     if (req.headers.get("X-Slack-Retry-Num")) return new Response("ok");
 
     const agent = await getAgentByName(env.MyAgent, body.team_id);
-    ctx.waitUntil(agent.onSlackEvent(body.event));
+    ctx.waitUntil(agent.onSlackEvent(body.event, new URL(req.url).origin));
     return new Response("ok");
   }
 } satisfies ExportedHandler<Env>;
