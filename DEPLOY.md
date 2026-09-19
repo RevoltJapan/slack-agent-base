@@ -74,4 +74,10 @@ npx wrangler secret put SLACK_SIGNING_SECRET
 | Request URL | |
 | DM の返事 | |
 
-すべて ✅ なら，「Cloudflare のダッシュボードの エージェント でトレースを見てみましょう」と案内して終わる．
+すべて ✅ なら，次の URL を**そのまま貼れる形で**画面に出し，「Cloudflare のダッシュボードの エージェント でトレースを見てみましょう」と案内して終わる．
+
+```
+https://dash.cloudflare.com/?to=/:account/agents
+```
+
+`:account` は書き換えない．ダッシュボードがログイン中のアカウントに自動で読み替える．
