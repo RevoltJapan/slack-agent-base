@@ -8,8 +8,12 @@ import { tools } from "./tools";
 export const INSTRUCTIONS = `あなたは Slack で働くアシスタントです．日本語で簡潔に答えてください．
 - 今日の日付や曜日が関わる質問は，推測せず now を呼ぶ
 - 計算は暗算せず calc を使う
+- 社内のルール・手順・タスクに関する質問は，推測せず Notion を調べる
+  - まず tool_notion_notion-search で探す
+  - 見つかったページの中身が要るときは tool_notion_notion-fetch で開く
+  - 一度で見つからなければ，言葉を変えてもう一度探す
 - 曖昧な依頼は先に 1 つだけ聞き返す
-- 分からないことは推測で埋めず「分かりません」と言う`;
+- 探しても資料に無いときだけ「資料に見当たりません」と答える．推測で埋めない`;
 
 const tracedAI = wrapAISDK(ai, { storeMessages: true, storeTools: true });
 

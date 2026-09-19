@@ -15,6 +15,9 @@ type SlackMessage = {
 // Notion が公開している MCP サーバー
 const NOTION_MCP_URL = "https://mcp.notion.com/mcp";
 
+// モデルに渡す Notion の道具（名前の末尾で判定）．増やしすぎるとコンテキスト長を超える
+const KEEP_TOOLS = new Set(["search", "fetch"]);
+
 // エージェント本体（Durable Object．Slack のワークスペースごとに 1 体）
 export class MyAgent extends Agent<Env> {
   // MCP をつなぐときの OAuth の戻り先．Slack のイベントから受け取って覚えておく
@@ -73,7 +76,19 @@ export class MyAgent extends Agent<Env> {
       await this.mcp.waitForConnections({ timeout: 10_000 });
     }
 
-    return this.mcp.getAITools();
+    // Notion の道具は数が多く，全部渡すとモデルのコンテキスト長を超えて落ちる．
+    // 使うものだけに絞る（名前の末尾で判定．`notion_search` でも `notion-search` でも拾える）
+    const all = this.mcp.getAITools();
+    const leaf = (name: string) => (name.split(/[_-]/).pop() ?? name).toLowerCase();
+    const picked = Object.fromEntries(Object.entries(all).filter(([name]) => KEEP_TOOLS.has(leaf(name))));
+
+    console.log(`[mcp] ${Object.keys(all).length} 個中 ${Object.keys(picked).length} 個を使う`);
+    console.log(`[mcp] 使える道具: ${Object.keys(all).join(", ")}`);
+
+    if (Object.keys(picked).length === 0) {
+      console.error("[mcp] 絞り込みの結果が空．KEEP_TOOLS を上のログの名前に合わせること");
+    }
+    return picked;
   }
 
   // Slack API 呼び出し（読み取り系は JSON を受け付けないので，全てフォーム形式で送る）
