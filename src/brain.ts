@@ -1,5 +1,5 @@
 import * as ai from "ai";
-import { stepCountIs, type ModelMessage } from "ai";
+import { stepCountIs, type ModelMessage, type ToolSet } from "ai";
 import { wrapAISDK } from "agents/observability/ai";
 import { createWorkersAI } from "workers-ai-provider";
 import { tools } from "./tools";
@@ -13,13 +13,19 @@ export const INSTRUCTIONS = `あなたは Slack で働くアシスタントで�
 
 const tracedAI = wrapAISDK(ai, { storeMessages: true, storeTools: true });
 
-export async function think(env: Env, messages: ModelMessage[], agentId: string, conversationId: string) {
+export async function think(
+  env: Env,
+  messages: ModelMessage[],
+  agentId: string,
+  conversationId: string,
+  extraTools: ToolSet = {}
+) {
   const workersai = createWorkersAI({ binding: env.AI });
   const result = await tracedAI.generateText({
     model: workersai(env.MODEL as Parameters<typeof workersai>[0]),
     system: INSTRUCTIONS,
     messages,
-    tools,
+    tools: { ...tools, ...extraTools },
     stopWhen: stepCountIs(5),
     runtimeContext: { agentId, conversationId },
     telemetry: { functionId: "slack-agent-base", includeRuntimeContext: { agentId: true, conversationId: true } }

@@ -12,6 +12,9 @@ type SlackMessage = {
   subtype?: string;
 };
 
+// Notion が公開している MCP サーバー
+const NOTION_MCP_URL = "https://mcp.notion.com/mcp";
+
 // エージェント本体（Durable Object．Slack のワークスペースごとに 1 体）
 export class MyAgent extends Agent<Env> {
   // MCP をつなぐときの OAuth の戻り先．Slack のイベントから受け取って覚えておく
@@ -35,11 +38,42 @@ export class MyAgent extends Agent<Env> {
         .filter((m) => m.text)
         .map((m) => ({ role: m.bot_id ? "assistant" : "user", content: m.text!.replace(/<@[A-Z0-9]+>/g, "") }));
       if (history.length === 0) history.push({ role: "user", content: (e.text ?? "").replace(/<@[A-Z0-9]+>/g, "") });
-      const text = await think(this.env, history, this.name, `${e.channel}:${thread}`);
+
+      // Notion の道具を用意する．まだ許可されていなければ，ここで止めて許可 URL を出す
+      const notionTools = await this.connectNotion(e.channel, thread);
+      if (!notionTools) return;
+
+      const text = await think(this.env, history, this.name, `${e.channel}:${thread}`, notionTools);
       await this.slack("chat.postMessage", { channel: e.channel, thread_ts: thread, text });
     } finally {
       await this.slack("agents.sessions.setStatus", { channel_id: e.channel, thread_ts: thread, status: "active" });
     }
+  }
+
+  // Notion の MCP サーバーにつなぐ．初回だけ Notion の許可（OAuth）が要る
+  // 許可がまだなら，許可用の URL を Slack に出して null を返す
+  private async connectNotion(channel: string, thread: string) {
+    // 眠りから覚めた直後は接続の復元中なので，終わるまで待つ
+    await this.mcp.waitForConnections({ timeout: 10_000 });
+
+    const notion = Object.values(this.getMcpServers().servers).find((s) => s.name === "notion");
+    if (notion?.state !== "ready") {
+      const result = await this.addMcpServer("notion", NOTION_MCP_URL, {
+        id: "notion",
+        callbackHost: this.callbackHost
+      });
+      if (result.state !== "ready") {
+        await this.slack("chat.postMessage", {
+          channel,
+          thread_ts: thread,
+          text: `Notion を使うには，最初に一度だけ許可が要ります．\n${result.authUrl}\nを開いて許可したら，もう一度話しかけてください．`
+        });
+        return null;
+      }
+      await this.mcp.waitForConnections({ timeout: 10_000 });
+    }
+
+    return this.mcp.getAITools();
   }
 
   // Slack API 呼び出し（読み取り系は JSON を受け付けないので，全てフォーム形式で送る）
