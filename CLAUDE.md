@@ -57,6 +57,30 @@ await this.addMcpServer("notion", url, { callbackHost: this.callbackHost });
 `src/tools.ts` に `tool({ description, inputSchema, execute })` を足す．
 `description` には「いつ呼ぶか」を書く．モデルはこれを読んで選ぶ．
 
+## 決まった時刻に動かす（定期実行）
+
+`agents` の `this.schedule()` を使う．Durable Object のアラームで動くので，受講者の PC を閉じていても動く．
+
+- `await this.schedule(180, "メソッド名", payload)` — 180 秒後に 1 回
+- `await this.schedule("0 0 * * *", "メソッド名", payload)` — cron でくり返し
+- `this.getSchedules()` で一覧，`this.cancelSchedule(id)` で取り消し
+- `callback` は**エージェントのメソッド名**（文字列）．関数そのものは渡せない
+
+**必ず守ること：**
+
+- **cron は UTC で解釈される**（`cron-schedule` がランタイムのローカル時刻を使い，Workers は UTC）．
+  **毎朝 9 時（日本時間）は `0 0 * * *`**．`0 9 * * *` と書くと 18:00 JST になる．
+  受講者が「毎朝 9 時に」と言ったら，**日本時間から UTC へ直したことを必ず伝える**
+- **どこへ送るかを payload に持たせる．** 定期実行には Slack のイベントが無いので，
+  投稿先のチャンネル（DM なら `D` で始まる id）を予約時に保存しておく．
+  この経路では `this.callbackHost` は空なので当てにしない
+- **Notion を使うなら，callback の中で `await this.mcp.waitForConnections({ timeout: 10_000 })` を先に呼ぶ．**
+  休止から起きた直後は接続の復元中で，`getAITools()` が空を返す
+- **いきなり本番の時刻にしない．** まず数分後で 1 回試して，届いてから cron にする．
+  毎朝 9 時で試すと，確認に 1 日かかる
+- cron の `schedule()` は既定で重複を作らない（callback と payload が同じなら既存を返す）が，
+  遅延実行はそうではない．要らなくなった予約は `cancelSchedule` で消す
+
 ## 教材で使うサンプルデータ
 
 受講者は練習用の Notion ワークスペースに，このテンプレートを複製して使う（架空の会社「アオゾラ商事」）：
