@@ -1,5 +1,6 @@
 import { Agent, getAgentByName, routeAgentRequest } from "agents";
-import type { ModelMessage } from "ai";
+import { tool, type ModelMessage } from "ai";
+import { z } from "zod";
 import { think } from "./brain";
 
 type SlackMessage = {
@@ -47,7 +48,10 @@ export class MyAgent extends Agent<Env> {
       const notionTools = await this.connectNotion(e.channel, thread);
       if (!notionTools) return;
 
-      const text = await think(this.env, history, this.name, `${e.channel}:${thread}`, notionTools);
+      const text = await think(this.env, history, this.name, `${e.channel}:${thread}`, {
+        ...notionTools,
+        ...this.scheduleTool(e.channel)
+      });
       await this.slack("chat.postMessage", { channel: e.channel, thread_ts: thread, text });
     } finally {
       await this.slack("agents.sessions.setStatus", { channel_id: e.channel, thread_ts: thread, status: "active" });
@@ -88,6 +92,71 @@ export class MyAgent extends Agent<Env> {
       console.error("[mcp] 絞り込みの結果が空．KEEP_TOOLS を上のログの名前に合わせること");
     }
     return picked;
+  }
+
+  // 「1分後に1回」「毎朝9時に」のような予約を，Slack の会話から作るための道具
+  private scheduleTool(channel: string) {
+    return {
+      schedule_daily_tasks: tool({
+        description:
+          "「今日やること」を Notion のタスク DB から読んで，このチャンネルに届ける予約を作る．" +
+          "「1分後に1回テストして」のような動作確認の依頼では delaySeconds に秒数を入れて呼ぶ．" +
+          "「毎朝9時に」のような毎日くり返す依頼では，日本時間から UTC へ直した cron（例: 毎朝9時JST→\"0 0 * * *\"）を入れて呼ぶ．" +
+          "delaySeconds と cron は同時に指定しない．呼んだら，実際に何時（日本時間）に届くかを必ず伝える",
+        inputSchema: z.object({
+          delaySeconds: z.number().optional(),
+          cron: z.string().optional()
+        }),
+        execute: async ({ delaySeconds, cron }) => {
+          if (!delaySeconds && !cron) return { error: "delaySeconds か cron のどちらかが必要です" };
+          const schedule = await this.schedule(cron ?? delaySeconds!, "postDailyTasks", { channel });
+          return { scheduled: true, id: schedule.id };
+        }
+      })
+    };
+  }
+
+  // 予約から呼ばれる本体．モデルに Notion のタスク DB を読ませ，まとめをチャンネルに投稿する
+  async postDailyTasks(payload: { channel: string }) {
+    await this.mcp.waitForConnections({ timeout: 10_000 });
+    const notion = Object.values(this.getMcpServers().servers).find((s) => s.name === "notion");
+    if (notion?.state !== "ready") {
+      await this.slack("chat.postMessage", {
+        channel: payload.channel,
+        text: "Notion にまだつながっていません．Slack でアシスタントに一度話しかけて，Notion の認可を済ませてください．"
+      });
+      return;
+    }
+
+    // チャットと同じ道具をモデルに渡し，タスク DB の読み取りもモデルに任せる
+    const all = this.mcp.getAITools();
+    const notionTools = Object.fromEntries(Object.entries(all).filter(([name]) => KEEP_TOOLS.some((t) => name.endsWith(t))));
+
+    const todayIso = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date());
+    const today = new Date().toLocaleDateString("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      weekday: "long"
+    });
+    const messages: ModelMessage[] = [
+      {
+        role: "user",
+        content:
+          `今日は ${today}（${todayIso}）です．タスク DB を読んで「今日やること」をまとめてください．\n` +
+          `手順：タスク DB の URL を tool_notion_notion-fetch で読み，結果にある collection:// の URL を tool_notion_notion-query-data-sources に渡し，` +
+          `SQL（SELECT * FROM "collection://..." WHERE "状態" != '完了'）で 1 回で全行を取ってください．search は使わないでください．\n\n` +
+          `取れた行のうち，期限（"date:期限:start"）が今日のものと，今日より前のものを対象にしてください．\n` +
+          `担当者ごとにグループ化して 1 つのメッセージにまとめ，担当者の書き方は「担当」の値をそのまま使ってください．担当者ごとに次の形で書いてください：\n` +
+          `- 期限超過：「タスク名（期限，N日超過）」を 1 行ずつ，期限が古い順\n` +
+          `- 今日締切：「タスク名（期限）」を 1 行ずつ\n` +
+          `- おすすめの順番：その人が今日どの順に何から手をつけるべきかを，番号付きで 1 行ずつ．期限超過が古いものを先に，同じ期限なら「メモ」の内容を手がかりにし，理由を一言添える\n` +
+          `期限とメモに書かれていない事情を推測して書かないでください．対象タスクが誰にも無ければ「今日やることはありません」とだけ書いてください．`
+      }
+    ];
+    const text = await think(this.env, messages, this.name, `schedule:${payload.channel}`, notionTools);
+    await this.slack("chat.postMessage", { channel: payload.channel, text });
   }
 
   // Slack API 呼び出し（読み取り系は JSON を受け付けないので，全てフォーム形式で送る）

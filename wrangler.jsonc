@@ -7,6 +7,9 @@
   "ai": { "binding": "AI" },
   "durable_objects": { "bindings": [{ "name": "MyAgent", "class_name": "MyAgent" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MyAgent"] }],
-  "vars": { "MODEL": "@cf/openai/gpt-oss-120b" },
+  "vars": {
+    "MODEL": "@cf/openai/gpt-oss-120b",
+    "TASK_DB_URL": "https://app.notion.com/p/606355a11b9c83979f2201dcd796d4ec?v=ad3355a11b9c836c8d9d88a2c9eb6ce9&source=copy_link"
+  },
   "observability": { "enabled": true, "traces": { "enabled": true } }
 }

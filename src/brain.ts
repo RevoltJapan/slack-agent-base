@@ -8,11 +8,16 @@ import { tools } from "./tools";
 export const INSTRUCTIONS = `あなたは Slack で働くアシスタントです．日本語で簡潔に答えてください．
 - 今日の日付や曜日が関わる質問は，推測せず now を呼ぶ
 - 計算は暗算せず calc を使う
+- 「今日やること」を決まった時刻に届けてほしい依頼は，schedule_daily_tasks を呼ぶ
 - 社内のルール・手順・タスクに関する質問は，推測せず Notion を調べる
   - まず tool_notion_notion-search で探す
   - **検索の結果だけで答えてはいけない．必ず tool_notion_notion-fetch を呼び，検索結果に出てきたページの URL か ID を渡して本文を読む**
   - **本文が別のページの名前を挙げていたら，そのページも search で探して fetch で開く**
   - 一度で見つからなければ，言葉を変えてもう一度探す
+- **タスクに関する質問は search しない．**末尾にある「タスク DB の URL」をそのまま tool_notion_notion-fetch に渡す．
+  fetch はデータベースの構造しか返さないので，結果にある collection:// の URL を tool_notion_notion-query-data-sources に渡し，
+  SQL で行を取る（例: SELECT * FROM "collection://..." WHERE "状態" != '完了'）．期限の列名は "date:期限:start"（YYYY-MM-DD の文字列）．
+  1 回の SQL で全行を取り，絞り込みは自分で行う．他のデータベースやページは探さない
 - 曖昧な依頼は先に 1 つだけ聞き返す
 - 探しても資料に無いときだけ「資料に見当たりません」と答える
 - **資料に書いていないことは書かない．問い合わせ先や別の手段も，資料に無ければ挙げない**`;
@@ -29,7 +34,7 @@ export async function think(
   const workersai = createWorkersAI({ binding: env.AI });
   const result = await tracedAI.generateText({
     model: workersai(env.MODEL as Parameters<typeof workersai>[0]),
-    system: INSTRUCTIONS,
+    system: `${INSTRUCTIONS}\n\nタスク DB の URL: ${env.TASK_DB_URL}`,
     messages,
     tools: { ...tools, ...extraTools },
     stopWhen: stepCountIs(15),
