@@ -61,7 +61,7 @@ await this.addMcpServer("notion", url, { callbackHost: this.callbackHost });
 
 `agents` の `this.schedule()` を使う．Durable Object のアラームで動くので，受講者の PC を閉じていても動く．
 
-- `await this.schedule(180, "メソッド名", payload)` — 180 秒後に 1 回
+- `await this.schedule(60, "メソッド名", payload)` — 60 秒後に 1 回
 - `await this.schedule("0 0 * * *", "メソッド名", payload)` — cron でくり返し
 - `this.getSchedules()` で一覧，`this.cancelSchedule(id)` で取り消し
 - `callback` は**エージェントのメソッド名**（文字列）．関数そのものは渡せない
@@ -71,13 +71,18 @@ await this.addMcpServer("notion", url, { callbackHost: this.callbackHost });
 - **cron は UTC で解釈される**（`cron-schedule` がランタイムのローカル時刻を使い，Workers は UTC）．
   **毎朝 9 時（日本時間）は `0 0 * * *`**．`0 9 * * *` と書くと 18:00 JST になる．
   受講者が「毎朝 9 時に」と言ったら，**日本時間から UTC へ直したことを必ず伝える**
-- **どこへ送るかを payload に持たせる．** 定期実行には Slack のイベントが無いので，
-  投稿先のチャンネル（DM なら `D` で始まる id）を予約時に保存しておく．
-  この経路では `this.callbackHost` は空なので当てにしない
+- **試すときは 1 分後にする．** まず `schedule(60, ...)` で 1 回届くことを確かめてから cron にする．
+  いきなり本番の時刻にすると，確認に 1 日かかる
+- **送り先はチャンネル．DM ではない．** タスクの担当者全員に向けて 1 つ投稿する．
+  定期実行には Slack のイベントが無いので，**投稿先のチャンネル id を予約時の payload に持たせる**．
+  この経路では `this.callbackHost` は空なので当てにしない．アプリがそのチャンネルに招待されている必要がある
+- **担当者は Notion の「担当」の値をそのまま本文に書く．** 練習用ワークスペースは受講者 1 人なので，
+  Slack の `@` メンションにはしない
+- **タスクは検索で探さない．事前に決めた場所を直接読む．**
+  タスクデータベースの URL を `wrangler.jsonc` の `vars` に `TASK_DB_URL` として置き，そこを読む．
+  検索は当たらないことがあり，定期実行は人が見ていないので**外したことに気づけない**
 - **Notion を使うなら，callback の中で `await this.mcp.waitForConnections({ timeout: 10_000 })` を先に呼ぶ．**
   休止から起きた直後は接続の復元中で，`getAITools()` が空を返す
-- **いきなり本番の時刻にしない．** まず数分後で 1 回試して，届いてから cron にする．
-  毎朝 9 時で試すと，確認に 1 日かかる
 - cron の `schedule()` は既定で重複を作らない（callback と payload が同じなら既存を返す）が，
   遅延実行はそうではない．要らなくなった予約は `cancelSchedule` で消す
 
