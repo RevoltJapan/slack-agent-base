@@ -32,7 +32,9 @@ export async function think(
     system: INSTRUCTIONS,
     messages,
     tools: { ...tools, ...extraTools },
-    stopWhen: stepCountIs(10),
+    stopWhen: stepCountIs(15),
+    // Workers AI の既定は 256 トークンで，SQL の引数や一覧が途中で切れる
+    maxOutputTokens: 4096,
     runtimeContext: { agentId, conversationId },
     telemetry: { functionId: "slack-agent-base", includeRuntimeContext: { agentId: true, conversationId: true } }
   });

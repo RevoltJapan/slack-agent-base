@@ -15,8 +15,9 @@ type SlackMessage = {
 // Notion が公開している MCP サーバー
 const NOTION_MCP_URL = "https://mcp.notion.com/mcp";
 
-// モデルに渡す Notion の道具（名前の末尾で判定）．増やしすぎるとコンテキスト長を超える
-const KEEP_TOOLS = new Set(["search", "fetch"]);
+// モデルに渡す Notion の道具（名前の末尾で判定）．増やしすぎるとコンテキスト長を超える．
+// query-data-sources は定義が巨大（数万文字）なので，コンテキストの広いモデルでだけ渡す
+const KEEP_TOOLS = ["notion-search", "notion-fetch", "notion-query-data-sources"];
 
 // エージェント本体（Durable Object．Slack のワークスペースごとに 1 体）
 export class MyAgent extends Agent<Env> {
@@ -76,11 +77,9 @@ export class MyAgent extends Agent<Env> {
       await this.mcp.waitForConnections({ timeout: 10_000 });
     }
 
-    // Notion の道具は数が多く，全部渡すとモデルのコンテキスト長を超えて落ちる．
-    // 使うものだけに絞る（名前の末尾で判定．`notion_search` でも `notion-search` でも拾える）
+    // Notion の道具は数が多く，全部渡すとモデルのコンテキスト長を超えて落ちる．使うものだけに絞る
     const all = this.mcp.getAITools();
-    const leaf = (name: string) => (name.split(/[_-]/).pop() ?? name).toLowerCase();
-    const picked = Object.fromEntries(Object.entries(all).filter(([name]) => KEEP_TOOLS.has(leaf(name))));
+    const picked = Object.fromEntries(Object.entries(all).filter(([name]) => KEEP_TOOLS.some((t) => name.endsWith(t))));
 
     console.log(`[mcp] ${Object.keys(all).length} 個中 ${Object.keys(picked).length} 個を使う`);
     console.log(`[mcp] 使える道具: ${Object.keys(all).join(", ")}`);
