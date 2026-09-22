@@ -38,13 +38,13 @@ Slack で動く最小の AI エージェント．AX booster「AIエージェン�
 - **取得した道具をそのまま全部渡してはいけない．** Notion の MCP はツールが多く，定義だけで 6 万トークンを超える．
   `qwen3-30b-a3b-fp8` の上限は 32,768 トークンなので，`AI_APICallError: 5021 ... exceeded this model context window limit` で落ち，**Slack に何も返らなくなる**．
   `getAITools()` は素の `Record` なので，**使うものだけキーを選んで渡す**．
-  **ページの本文を読むだけなら `notion-search` と `notion-fetch` で足りる**（第 3〜4 章はこれ）．
+  **ページの本文を読むだけなら `notion-search` と `notion-fetch` で足りる**（「外部ツール連携」まではこれだけ）．
 - **データベースの行は `fetch` では読めない．** `fetch` にデータベースの URL を渡すと**構造（スキーマ）しか返らない**．
   行は，fetch の結果にある `collection://…` の URL を `notion-query-data-sources` に渡し，SQL で取る：
   `SELECT * FROM "collection://…" WHERE "状態" != '完了'`．列名は `"タスク名"` `"担当"` `"状態"` `"date:期限:start"`（YYYY-MM-DD の文字列）．
   1 回の SQL で全行を取り，絞り込み（今日・期限超過・担当）はその後で行う．search で探さない
 - **`notion-query-data-sources` の定義は数万文字あり，`qwen3-30b`（32,768）には入らない．**
-  これを渡すときは `wrangler.jsonc` の `vars.MODEL` を `@cf/openai/gpt-oss-120b`（128k）に替える（第 5 章の最初の手順）．
+  これを渡すときは `wrangler.jsonc` の `vars.MODEL` を `@cf/openai/gpt-oss-120b`（128k）に替える（「定期タスク」の最初の手順）．
   替えると消費が増える．何が変わるかは下の「モデル」を受講者に一言伝える
   `getAITools(filter)` のフィルタはサーバー単位（`serverId` / `serverName` / `state`）で，ツール単位の絞り込みはできない
 - `think()` は今 `src/tools.ts` の `tools` だけを渡している．MCP の道具を混ぜるには **`think()` が追加のツールを受け取れるようにする**
@@ -97,7 +97,7 @@ await this.addMcpServer("notion", url, { callbackHost: this.callbackHost });
 - cron の `schedule()` は既定で重複を作らない（callback と payload が同じなら既存を返す）が，
   遅延実行はそうではない．要らなくなった予約は `cancelSchedule` で消す
 
-## 業務の分解シートを埋める（第 5 章「実務タスクを見つける」）
+## 業務の分解シートを埋める（「実務タスクを見つける」）
 
 受講者が「業務を分解したい」「分解シートを埋めたい」「AI に任せる業務を見つけたい」と言ったら，`WORKSHEET.md` を読んで次のように進める．
 
@@ -136,10 +136,10 @@ Notion がつながったかは，Slack でこれを聞いてもらって確か�
 
 `wrangler.jsonc` の `vars.MODEL`．無料枠は **10,000 Neurons/日**（Free・Paid 共通）．
 
-| モデル | 文脈長 | 入力 Neurons/M | 出力 Neurons/M | 使う章 |
+| モデル | 文脈長 | 入力 Neurons/M | 出力 Neurons/M | 使う場面 |
 |---|---|---|---|---|
-| `@cf/qwen/qwen3-30b-a3b-fp8`（既定） | 32,768 | 4,625 | 30,475 | 第 3〜4 章．無料枠で 1 日 30 ターン前後 |
-| `@cf/openai/gpt-oss-120b` | 128,000 | 31,818 | 68,182 | 第 5 章以降．`query-data-sources` を渡すとき．無料枠では **1 日 4〜5 ターンが目安** |
+| `@cf/qwen/qwen3-30b-a3b-fp8`（既定） | 32,768 | 4,625 | 30,475 | 「外部ツール連携」まで．無料枠で 1 日 30 ターン前後 |
+| `@cf/openai/gpt-oss-120b` | 128,000 | 31,818 | 68,182 | 「定期タスク」以降．`query-data-sources` を渡すとき．無料枠では **1 日 4〜5 ターンが目安** |
 
 （出典：Cloudflare Workers AI 料金表，2026-09．エージェントはステップごとに全文脈を再送するので，道具定義が大きいほど 1 ターンの消費が増える）
 
