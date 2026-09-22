@@ -117,7 +117,10 @@ await this.addMcpServer("notion", url, { callbackHost: this.callbackHost });
 - **指示書**は `src/brain.ts` の `INSTRUCTIONS` に，**役割／していいこと／してはいけないこと／迷ったらどうするか** の 4 項目で書く．シートの「次章へ持ち越すこと」をそのまま起点にする
 - **道具**は 1 つずつ．順に確かめる：いまある道具（日付・計算・Notion）で足りるか → MCP にあるか → 無ければ `src/tools.ts` に自作．
   自作の `description` には **「いつ呼ぶか」と「何を入れたら何が返るか」** を書く．受講者にもこの 2 点を聞く
-- Slack の発言を読む道具が要るときは `conversations.history`（公開チャンネルの `channels:history` は付与済み．アプリがそのチャンネルに入っている必要がある）
+- **Notion に書き込む道具**（`notion-create-pages`・`notion-update-page`）が要るときは，Notion の道具の絞り込みに加える．
+  **書き込む前に，登録する内容を Slack に提示して受講者の OK を待つ**作りにする．
+  新規か更新かは，先に `query-data-sources` で既存の行を読んでから判定する．列名は「教材で使うサンプルデータ」のとおり
+- Slack の発言を読む道具が要るときは `conversations.history`（`channels:history` は付与済み）．ただし練習用ワークスペースには履歴が無いので，例題には使わない
 - **トリガー**は最後．人が話しかけるだけで足りるならそのまま．時間で動かすなら「決まった時刻に動かす」の節に従う
 - 各段で **デプロイ → 「Slack で試してください」 → 動いたら「コミットしますか」**．一度に 2 つ以上変えない
 - 外部サービスの鍵（API キー等）は **`wrangler secret put` を受講者自身に実行してもらう．** コードにも会話にも書かせない
