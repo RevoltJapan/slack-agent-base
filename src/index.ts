@@ -18,7 +18,14 @@ const NOTION_MCP_URL = "https://mcp.notion.com/mcp";
 
 // モデルに渡す Notion の道具（名前の末尾で判定）．増やしすぎるとコンテキスト長を超える．
 // query-data-sources は定義が巨大（数万文字）なので，コンテキストの広いモデルでだけ渡す
-const KEEP_TOOLS = ["notion-search", "notion-fetch", "notion-query-data-sources"];
+const KEEP_TOOLS = [
+  "notion-search",
+  "notion-fetch",
+  "notion-query-data-sources",
+  // 書き込み．タスク DB への新規追加と既存の更新に使う
+  "notion-create-pages",
+  "notion-update-page"
+];
 
 // エージェント本体（Durable Object．Slack のワークスペースごとに 1 体）
 export class MyAgent extends Agent<Env> {
