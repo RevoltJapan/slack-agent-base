@@ -1,1 +1,0 @@
-This folder contains the built output assets for the worker "slack-agent-base" generated at 2026-09-14T05:17:57.221Z.
